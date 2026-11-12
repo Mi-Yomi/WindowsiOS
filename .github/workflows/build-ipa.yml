@@ -1,0 +1,51 @@
+name: Build unsigned IPA
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/build-ipa.yml'
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install build tools
+        run: brew install xcodegen meson ninja pkg-config
+      - name: Build dependencies
+        run: bash scripts/build_ios_deps.sh
+      - name: Build iOS engine
+        run: make -j3 ios-lib
+      - name: Generate project
+        run: xcodegen generate --spec ios/project.yml
+      - name: Build unsigned app
+        run: |
+          xcodebuild -project ios/WindowsiOS.xcodeproj -scheme WindowsiOS \
+            -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' \
+            -derivedDataPath build/DerivedData CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY='' DEVELOPMENT_TEAM='' \
+            PROVISIONING_PROFILE_SPECIFIER='' build
+      - name: Package IPA
+        run: |
+          mkdir -p build/package/Payload
+          cp -R build/DerivedData/Build/Products/Release-iphoneos/WindowsiOS.app build/package/Payload/
+          cd build/package
+          zip -qry WindowsiOS-unsigned.ipa Payload
+          unzip -t WindowsiOS-unsigned.ipa
+          shasum -a 256 WindowsiOS-unsigned.ipa > SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: WindowsiOS-unsigned
+          path: |
+            build/package/WindowsiOS-unsigned.ipa
+            build/package/SHA256SUMS
+          if-no-files-found: error
+      - name: Upload dependency logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-build-logs
+          path: work/ios_deps_build/*.log
+          if-no-files-found: ignore

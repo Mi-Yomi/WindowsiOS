@@ -163,6 +163,8 @@ final class HingeObserverViewController: UIViewController {
     private func installHingeObserverIfAvailable() {
         guard !didInstallHinge else { return }
         didInstallHinge = true
+        // Foldable-only APIs are opt-in; standard iPhones use the existing layout fallback.
+        #if WINDOWS_IOS_ENABLE_HINGE
         guard NSClassFromString("UIHingeInteraction") != nil else { return }
         if #available(iOS 27.1, *) {
             let interaction = UIHingeInteraction { [weak self] _, update in
@@ -179,6 +181,7 @@ final class HingeObserverViewController: UIViewController {
             }
             view.addInteraction(interaction)
         }
+        #endif
     }
 }
 
